@@ -7,7 +7,9 @@ authors = [
     { name = "jsdavid-won", email = "jsdavid.won@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "ipykernel>=7.4.0",
+]
 
 [project.scripts]
 nanogpt = "nanogpt:main"
