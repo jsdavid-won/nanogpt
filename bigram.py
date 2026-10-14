@@ -6,10 +6,11 @@ from torch import nn
 
 # Hyperparameters
 batch_size = 32
-block_size = 8
+seq_len = 8
 lr = 1e-2
 n_steps = 3000
 eval_steps = 200
+d_model = 32
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print(f"Device: {device}")
@@ -40,18 +41,18 @@ train_data, val_data = data[:partition_idx], data[partition_idx:]
 
 def get_batch(split):
     if split == "train":
-        idx = torch.randint(len(train_data) - block_size, (batch_size,))
+        idx = torch.randint(len(train_data) - seq_len, (batch_size,))
         data = train_data
     elif split == "val":
-        idx = torch.randint(len(val_data) - block_size, (batch_size,))
+        idx = torch.randint(len(val_data) - seq_len, (batch_size,))
         data = val_data
     else:
         raise ValueError("``split`` must be 'train' or 'val'")
 
     X, y = [], []
     for i in idx:
-        X.append(data[i : i + block_size])
-        y.append(data[i + 1 : i + 1 + block_size])
+        X.append(data[i : i + seq_len])
+        y.append(data[i + 1 : i + 1 + seq_len])
     X = torch.stack(X)
     y = torch.stack(y)
 
@@ -77,20 +78,22 @@ def estimate_loss():
 
 # Bigram model
 class BigramLM(nn.Module):
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
         # Straight idx to logits
-        self.embedding = nn.Embedding(vocab_size, vocab_size)
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.head = nn.Linear(d_model, vocab_size)
 
     def forward(self, idx, targets=None):
         if targets is None:
-            return self.embedding(idx)
+            return self.head(self.embedding(idx)), None
 
-        logits = self.embedding(idx) # (B, L, C) / (batch_size, block_size, vocab_size) in this case
+        h = self.embedding(idx) # (B, L, D) / (batch_size, seq_len, d_model)
+        logits = self.head(h) # (B, L, V) / (batch_size, seq_len, vocab_size)
 
-        B, L, C = logits.shape
+        B, L, V = logits.shape
         # Reshaping to match expected shape of ``F.cross_entropy()``
-        loss = F.cross_entropy(logits.reshape((B * L, C)), targets.reshape(B * L))
+        loss = F.cross_entropy(logits.reshape((B * L, V)), targets.reshape(B * L))
         return logits, loss
 
     @torch.no_grad()
@@ -99,9 +102,9 @@ class BigramLM(nn.Module):
         input is a tensor of shape (batch_size, seq_length)
         """
         for _ in range(n_new_tokens):
-            logits = self(input) # (B, L, C)
+            logits, _ = self(input) # (B, L, V)
             # Only need the predictions for the next char (idx)
-            probs = F.softmax(logits[:, -1, :], dim=-1) # (B, C)
+            probs = F.softmax(logits[:, -1, :], dim=-1) # (B, V)
             next_idx = torch.multinomial(probs, 1)
             input = torch.cat([input, next_idx], dim=1)
         
@@ -110,7 +113,7 @@ class BigramLM(nn.Module):
 
 # Training
 
-model = BigramLM(vocab_size)
+model = BigramLM()
 model.to(device)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
