@@ -80,16 +80,17 @@ def estimate_loss():
 class BigramLM(nn.Module):
     def __init__(self):
         super().__init__()
-        # Straight idx to logits
         self.embedding = nn.Embedding(vocab_size, d_model)
+        self.positional_enc = nn.Embedding(seq_len, d_model)
         self.head = nn.Linear(d_model, vocab_size)
 
     def forward(self, idx, targets=None):
         if targets is None:
             return self.head(self.embedding(idx)), None
 
-        h = self.embedding(idx) # (B, L, D) / (batch_size, seq_len, d_model)
-        logits = self.head(h) # (B, L, V) / (batch_size, seq_len, vocab_size)
+        x = self.embedding(idx) # (B, L, D) / (batch_size, seq_len, d_model)
+        x += self.positional_enc(torch.arange(seq_len)) # (L, D) added w/ broadcasting
+        logits = self.head(x) # (B, L, V) / (batch_size, seq_len, vocab_size)
 
         B, L, V = logits.shape
         # Reshaping to match expected shape of ``F.cross_entropy()``
