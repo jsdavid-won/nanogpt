@@ -77,20 +77,30 @@ def estimate_loss():
 
 
 class SingleheadAttention(nn.Module):
-    def __init__(self):
+    def __init__(self, d_head=d_model):
         super().__init__()
-        self.query = nn.Linear(d_model, d_model, bias=False)
-        self.key = nn.Linear(d_model, d_model, bias=False)
-        self.value = nn.Linear(d_model, d_model, bias=False)
+        self.query = nn.Linear(d_model, d_head, bias=False)
+        self.key = nn.Linear(d_model, d_head, bias=False)
+        self.value = nn.Linear(d_model, d_head, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(seq_len, seq_len)))
 
     def forward(self, x):
         q, k, v = self.query(x), self.key(x), self.value(x) # (B, L, d_model)
         scores = (q @ k.transpose(-2, -1)) / d_model**0.5
-        # Masking with truncated tril to accept shorter sequences
+        # Using truncated tril when masking to accept shorter sequences
         l = x.shape[1]
         scores = scores.masked_fill(self.tril[:l, :l] == 0, -torch.inf)
         return torch.softmax(scores, dim=-1) @ v # (B, L, d_model)
+
+class MultiheadAttention(nn.Module):
+    def __init__(self, num_heads):
+        super().__init__()
+        if d_model % num_heads != 0:
+            raise ValueError("d_model must be divisible by num_heads")
+        self.heads = nn.ModuleList([SingleheadAttention(d_model // num_heads) for _ in range(num_heads)])
+
+    def forward(self, x):
+        return torch.cat([h(x) for h in self.heads], dim=-1)
 
 
 # Bigram model
@@ -99,7 +109,7 @@ class BigramLM(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.positional_enc = nn.Embedding(seq_len, d_model)
-        self.attn_head = SingleheadAttention()
+        self.attn_head = MultiheadAttention(4)
         self.head = nn.Linear(d_model, vocab_size)
 
     def forward(self, idx, targets=None):
