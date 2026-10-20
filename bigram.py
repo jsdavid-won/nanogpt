@@ -106,13 +106,24 @@ class MultiheadAttention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(self, d_model):
         super().__init__()
-        self.nn = nn.Sequential([
+        self.nn = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.ReLU(),
-        ])
+        )
 
     def forward(self, x):
         return self.nn(x)
+
+
+class Block(nn.Module):
+    """Transformer block"""
+    def __init__(self, d_model, num_heads):
+        super().__init__()
+        self.multihead_attn = MultiheadAttention(num_heads)
+        self.nn = FeedForward(d_model)
+
+    def forward(self, x):
+        return self.nn(self.multihead_attn(x))
 
 
 # Bigram model
@@ -121,15 +132,17 @@ class BigramLM(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.positional_enc = nn.Embedding(seq_len, d_model)
-        self.attn_head = MultiheadAttention(4)
-        self.ff = FeedForward(d_model)
+        self.blocks = nn.Sequential(
+            Block(d_model, 4),
+            Block(d_model, 4),
+            Block(d_model, 4),
+        )
         self.head = nn.Linear(d_model, vocab_size)
 
     def forward(self, idx, targets=None):
-        x = self.embedding(idx) # (B, L, d_model)
+        x = self.embedding(idx) 
         x += self.positional_enc(torch.arange(x.shape[1], device=device)) # (L, d_model)
-        x = self.attn_head(x) # (B, L, d_model)
-        x = self.ff(x) # (B, L, d_model)
+        x = self.blocks(x) # (B, L, d_model)
         logits = self.head(x) # (B, L, vocab_size)
 
         if targets is None:
