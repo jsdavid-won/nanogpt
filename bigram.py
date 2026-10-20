@@ -122,7 +122,9 @@ class Block(nn.Module):
     """Transformer block"""
     def __init__(self, d_model, num_heads):
         super().__init__()
+        self.ln1 = nn.LayerNorm(d_model)
         self.multihead_attn = MultiheadAttention(num_heads)
+        self.ln2 = nn.LayerNorm(d_model)
         self.nn = FeedForward(d_model)
 
     def forward(self, x):
@@ -141,6 +143,7 @@ class BigramLM(nn.Module):
             Block(d_model, 4),
             Block(d_model, 4),
             Block(d_model, 4),
+            nn.LayerNorm(d_model),
         )
         self.head = nn.Linear(d_model, vocab_size)
 
