@@ -5,14 +5,14 @@ import torch.nn.functional as F
 from torch import nn
 
 # Hyperparameters
-batch_size = 32
-seq_len = 8
-lr = 1e-3
+batch_size = 64
+seq_len = 256
+lr = 3e-4
 n_steps = 5000
 eval_steps = 500
-d_model = 32
-num_heads = 4
-num_blocks = 3
+d_model = 384
+num_heads = 6
+num_blocks = 6
 dropout = 0.2
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 
