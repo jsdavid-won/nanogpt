@@ -98,17 +98,20 @@ class MultiheadAttention(nn.Module):
         if d_model % num_heads != 0:
             raise ValueError("d_model must be divisible by num_heads")
         self.heads = nn.ModuleList([SingleheadAttention(d_model // num_heads) for _ in range(num_heads)])
+        self.proj = nn.Linear(d_model, d_model)
 
     def forward(self, x):
-        return torch.cat([h(x) for h in self.heads], dim=-1)
+        multihead = torch.cat([h(x) for h in self.heads], dim=-1)
+        return self.proj(multihead)
 
 
 class FeedForward(nn.Module):
     def __init__(self, d_model):
         super().__init__()
         self.nn = nn.Sequential(
-            nn.Linear(d_model, d_model),
+            nn.Linear(d_model, 4 * d_model),
             nn.ReLU(),
+            nn.Linear(4 * d_model, d_model)
         )
 
     def forward(self, x):
