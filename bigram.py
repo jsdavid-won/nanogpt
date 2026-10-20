@@ -137,8 +137,8 @@ class Block(nn.Module):
         self.nn = FeedForward(d_model)
 
     def forward(self, x):
-        x = x + self.multihead_attn(x)
-        x = x + self.nn(x)
+        x = x + self.multihead_attn(self.ln1(x))
+        x = x + self.nn(self.ln2(x))
         return x
 
 
@@ -200,7 +200,7 @@ for step in range(n_steps):
     loss.backward()
     optimizer.step()
 
-    if step % 500 == 0:
+    if step % 500 == 0 or step == n_steps - 1:
         losses = estimate_loss()
         train_loss, val_loss = losses["train"], losses["val"]
         print(f"Step: {step}/{n_steps}, train loss: {train_loss}, val_loss: {val_loss}")
