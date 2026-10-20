@@ -126,7 +126,9 @@ class Block(nn.Module):
         self.nn = FeedForward(d_model)
 
     def forward(self, x):
-        return self.nn(self.multihead_attn(x))
+        x = x + self.multihead_attn(x)
+        x = x + self.nn(x)
+        return x
 
 
 # Bigram model
