@@ -11,6 +11,8 @@ lr = 1e-3
 n_steps = 5000
 eval_steps = 500
 d_model = 32
+num_heads = 4
+num_blocks = 3
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 
 print(f"Device: {device}")
@@ -139,18 +141,15 @@ class BigramLM(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.positional_enc = nn.Embedding(seq_len, d_model)
-        self.blocks = nn.Sequential(
-            Block(d_model, 4),
-            Block(d_model, 4),
-            Block(d_model, 4),
-            nn.LayerNorm(d_model),
-        )
+        self.blocks = nn.Sequential(*[Block(d_model, num_heads) for _ in range(num_blocks)])
+        self.ln_f = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, vocab_size)
 
     def forward(self, idx, targets=None):
         x = self.embedding(idx) 
         x += self.positional_enc(torch.arange(x.shape[1], device=device)) # (L, d_model)
         x = self.blocks(x) # (B, L, d_model)
+        x = self.ln_f(x) # (B, L, d_model)
         logits = self.head(x) # (B, L, vocab_size)
 
         if targets is None:
