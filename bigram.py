@@ -13,6 +13,7 @@ eval_steps = 500
 d_model = 32
 num_heads = 4
 num_blocks = 3
+dropout = 0.2
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 
 print(f"Device: {device}")
@@ -85,6 +86,7 @@ class SingleheadAttention(nn.Module):
         self.key = nn.Linear(d_model, d_head, bias=False)
         self.value = nn.Linear(d_model, d_head, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(seq_len, seq_len)))
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         q, k, v = self.query(x), self.key(x), self.value(x) # (B, L, d_model)
@@ -92,7 +94,9 @@ class SingleheadAttention(nn.Module):
         # Using truncated tril when masking to accept shorter sequences
         l = x.shape[1]
         scores = scores.masked_fill(self.tril[:l, :l] == 0, -torch.inf)
-        return torch.softmax(scores, dim=-1) @ v # (B, L, d_model)
+        weights = torch.softmax(scores, dim=-1)
+        weights = self.dropout(weights)
+        return weights @ v # (B, L, d_model)
 
 class MultiheadAttention(nn.Module):
     def __init__(self, num_heads):
@@ -101,10 +105,12 @@ class MultiheadAttention(nn.Module):
             raise ValueError("d_model must be divisible by num_heads")
         self.heads = nn.ModuleList([SingleheadAttention(d_model // num_heads) for _ in range(num_heads)])
         self.proj = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         multihead = torch.cat([h(x) for h in self.heads], dim=-1)
-        return self.proj(multihead)
+        out = self.proj(multihead)
+        return self.dropout(out)
 
 
 class FeedForward(nn.Module):
@@ -113,7 +119,8 @@ class FeedForward(nn.Module):
         self.nn = nn.Sequential(
             nn.Linear(d_model, 4 * d_model),
             nn.ReLU(),
-            nn.Linear(4 * d_model, d_model)
+            nn.Linear(4 * d_model, d_model),
+            nn.Dropout(dropout),
         )
 
     def forward(self, x):
